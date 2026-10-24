@@ -242,7 +242,7 @@ const uploadDocument = async (file, documentType) => {
 
   try {
     const founderResponse = await fetch(
-      `http://localhost:8080/api/startups/founder?email=${encodeURIComponent(form.email)}`
+      `https://startupregistration-backend.onrender.com/api/startups/founder?email=${encodeURIComponent(form.email)}`
     );
 
     if (!founderResponse.ok) {
@@ -258,7 +258,7 @@ const uploadDocument = async (file, documentType) => {
     formData.append("file", file);
 
     const response = await fetch(
-      "http://localhost:8080/api/registration-documents/upload",
+      "https://startupregistration-backend.onrender.com/api/registration-documents/upload",
       {
         method: "POST",
         body: formData
@@ -284,7 +284,7 @@ const loadUploadedDocuments = async () => {
     setDocumentsLoading(true);
 
     const response = await fetch(
-      `http://localhost:8080/api/registration-documents/registration/${registrationKey}`
+      `https://startupregistration-backend.onrender.com/api/registration-documents/registration/${registrationKey}`
     );
 
     if (!response.ok) {
@@ -336,7 +336,7 @@ useEffect(() => {
 async function registerFounder() {
   try {
     const response = await fetch(
-      'http://localhost:8080/api/founders/register',
+      'https://startupregistration-backend.onrender.com/api/founders/register',
       {
         method: 'POST',
         headers: {
@@ -385,7 +385,7 @@ async function saveStartupDetails() {
 const founderEmail = form.email;
 
 const founderResponse = await fetch(
-  `http://localhost:8080/api/startups/founder?email=${encodeURIComponent(founderEmail)}`,
+  `https://startupregistration-backend.onrender.com/api/startups/founder?email=${encodeURIComponent(founderEmail)}`,
   {
     method: "GET",
     headers: {
@@ -439,7 +439,7 @@ if (!founderId) {
     };
 
     const startupResponse = await fetch(
-      "http://localhost:8080/api/startups/save",
+      "https://startupregistration-backend.onrender.com/api/startups/save",
       {
         method: "POST",
         headers: {
@@ -467,7 +467,7 @@ if (!founderId) {
     };
 
     const profileResponse = await fetch(
-      "http://localhost:8080/api/founder-profiles/save",
+      "https://startupregistration-backend.onrender.com/api/founder-profiles/save",
       {
         method: "POST",
         headers: {
@@ -502,7 +502,7 @@ const teamPayload = {
 };
 
 const teamResponse = await fetch(
-  "http://localhost:8080/api/team-members/save",
+  "https://startupregistration-backend.onrender.com/api/team-members/save",
   {
     method: "POST",
     headers: {
