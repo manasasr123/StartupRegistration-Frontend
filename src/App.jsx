@@ -19,6 +19,21 @@ const steps = [
 function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [showLogin, setShowLogin] = useState(false);
+  const [founder, setFounder] = useState(null);
+  const [activeAccountEmail, setActiveAccountEmail] = useState(
+  () => sessionStorage.getItem("activeAccountEmail") || ""
+);
+  const founderDraftKey = activeAccountEmail
+  ? `founderRegistrationDraft:${activeAccountEmail}`
+  : "founderRegistrationDraft";
+
+const startupDraftKey = activeAccountEmail
+  ? `startupRegistrationDraft:${activeAccountEmail}`
+  : "startupRegistrationDraft";
+
+  const [loginEmail, setLoginEmail] = useState("");
+const [loginPassword, setLoginPassword] = useState("");
+const [loginLoading, setLoginLoading] = useState(false);
 
 useEffect(() => {
   localStorage.setItem("registrationCurrentStep", String(currentStep));
@@ -63,19 +78,27 @@ const [form, setForm] = useState(() => {
 });
 
 useEffect(() => {
+  const key = activeAccountEmail
+    ? `founderRegistrationDraft:${activeAccountEmail}`
+    : "founderRegistrationDraft";
+
   localStorage.setItem(
-    "founderRegistrationDraft",
+    key,
     JSON.stringify({
       fullName: form.fullName,
       email: form.email,
       mobile: form.mobile,
     })
   );
-}, [form.fullName, form.email, form.mobile]);
+}, [form.fullName, form.email, form.mobile, activeAccountEmail]);
 
   
 const [registration, setRegistration] = useState(() => {
-  const savedDraft = localStorage.getItem('startupRegistrationDraft');
+  const savedDraft = localStorage.getItem(
+  activeAccountEmail
+    ? `startupRegistrationDraft:${activeAccountEmail}`
+    : "startupRegistrationDraft"
+);
 
   if (savedDraft) {
     try {
@@ -152,6 +175,54 @@ const [registration, setRegistration] = useState(() => {
   };
 });
 
+useEffect(() => {
+  if (!activeAccountEmail) return;
+
+  const savedDraft = localStorage.getItem(
+    `startupRegistrationDraft:${activeAccountEmail}`
+  );
+
+  if (savedDraft) {
+    try {
+      const parsedDraft = JSON.parse(savedDraft);
+
+      setRegistration((previous) => ({
+        ...previous,
+        ...parsedDraft,
+        startupLogo: null,
+        documents: previous.documents,
+      }));
+    } catch (error) {
+      console.error("Unable to restore account registration draft:", error);
+    }
+  }
+}, [activeAccountEmail]);
+
+useEffect(() => {
+  if (!activeAccountEmail) return;
+
+  const savedForm = localStorage.getItem(
+    `founderRegistrationDraft:${activeAccountEmail}`
+  );
+
+  if (savedForm) {
+    try {
+      const parsed = JSON.parse(savedForm);
+
+      setForm((previous) => ({
+        ...previous,
+        fullName: parsed.fullName || "",
+        email: activeAccountEmail,
+        mobile: parsed.mobile || "",
+        password: "",
+        confirmPassword: "",
+      }));
+    } catch (error) {
+      console.error("Unable to restore founder draft:", error);
+    }
+  }
+}, [activeAccountEmail]);
+
 
   
 
@@ -163,8 +234,8 @@ const startNewRegistration = () => {
   setRegistrationKey(newKey);
 
   // Remove the previous saved draft
-  localStorage.removeItem("startupRegistrationDraft");
-  localStorage.removeItem("founderRegistrationDraft");
+  /*localStorage.removeItem("startupRegistrationDraft");
+  localStorage.removeItem("founderRegistrationDraft");*/
 
   // Reset all registration fields to their initial values
   setRegistration({
@@ -322,11 +393,12 @@ useEffect(() => {
     },
   };
 
-  localStorage.setItem(
-    'startupRegistrationDraft',
-    JSON.stringify(draft)
-  );
-}, [registration]);
+  if (activeAccountEmail) {
+  localStorage.setItem(startupDraftKey, JSON.stringify(draft));
+} else {
+  localStorage.setItem("startupRegistrationDraft", JSON.stringify(draft));
+}
+}, [registration, activeAccountEmail, startupDraftKey]);
 
 
   function updateForm(event) {
@@ -378,6 +450,106 @@ async function registerFounder() {
     setCurrentStep((step) => Math.min(step + 1, 11))
   }
 
+async function loadSavedStartupDetails(email) {
+  try {
+    const baseUrl = "https://startupregistration-backend.onrender.com";
+
+    // 1. Fetch startup details
+    const startupResponse = await fetch(
+      `${baseUrl}/api/startups/details?email=${encodeURIComponent(email)}`
+    );
+
+    if (startupResponse.status === 404) {
+      alert("No saved startup details found. You can start a new registration.");
+      return false;
+    }
+
+    if (!startupResponse.ok) {
+      throw new Error("Unable to load saved startup details.");
+    }
+
+    const startupData = await startupResponse.json();
+
+    // 2. Fetch founder profile
+    const profileResponse = await fetch(
+      `${baseUrl}/api/founder-profiles/founder?email=${encodeURIComponent(email)}`
+    );
+
+    let profileData = {};
+
+    if (profileResponse.ok) {
+      profileData = await profileResponse.json();
+    } else if (profileResponse.status !== 404) {
+      throw new Error("Unable to load founder profile.");
+    }
+
+    // 3. Fetch the founder record to get the founder ID
+    const founderResponse = await fetch(
+      `${baseUrl}/api/startups/founder?email=${encodeURIComponent(email)}`
+    );
+
+    if (!founderResponse.ok) {
+      throw new Error("Unable to retrieve founder account.");
+    }
+
+    const founderData = await founderResponse.json();
+
+    // 4. Fetch team members using the founder ID
+    const teamResponse = await fetch(
+      `${baseUrl}/api/team-members/founder?founderId=${encodeURIComponent(founderData.id)}`
+    );
+
+    if (!teamResponse.ok) {
+      throw new Error("Unable to load team members.");
+    }
+
+    const teamData = await teamResponse.json();
+
+    // 5. Populate all saved registration sections
+    setRegistration((previous) => ({
+      ...previous,
+      ...startupData,
+designation: profileData.designation ?? "",
+linkedIn: profileData.linkedin ?? "",
+experience: profileData.experience ?? "",
+qualification: profileData.qualification ?? "",
+previousStartup: profileData.previousStartup ?? "",
+bio: profileData.bio ?? "",
+skills: Array.isArray(profileData.skills)
+  ? profileData.skills
+  : typeof profileData.skills === "string" && profileData.skills.trim()
+    ? profileData.skills.split(",").map((skill) => skill.trim())
+    : [],
+
+      founders: teamData.length > 0
+        ? teamData.map((member) => ({
+            name: member.name ?? "",
+            role: member.role ?? "",
+            email: member.email ?? "",
+            mobile: member.mobile ?? "",
+            equityPercentage: member.equityPercentage ?? "",
+            linkedInProfile: member.linkedinProfile ?? "",
+            experience: member.experience ?? "",
+          }))
+        : previous.founders,
+
+      founderCount: teamData.length > 0
+        ? teamData.length
+        : previous.founderCount,
+
+      startupLogo: null,
+      documents: previous.documents,
+    }));
+
+    return true;
+  } catch (error) {
+    console.error("Loading saved registration failed:", error);
+    alert(error.message || "Unable to load saved registration.");
+    return false;
+  }
+}
+
+
  
 async function saveStartupDetails() {
   try {
@@ -393,6 +565,8 @@ const founderResponse = await fetch(
     },
   }
 );
+
+
 
 if (!founderResponse.ok) {
   throw new Error(
@@ -580,10 +754,54 @@ const readinessScore = Math.round(
 
       <form
         className="mt-8 space-y-5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          alert("Login API is not connected yet.");
-        }}
+        
+onSubmit={async (event) => {
+  event.preventDefault();
+  setLoginLoading(true);
+
+  try {
+    const response = await fetch(
+      "https://startupregistration-backend.onrender.com/api/founders/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.message || "Invalid email or password");
+      return;
+    }
+
+    alert(`Welcome, ${data.fullName}!`);
+const email = data.email.toLowerCase();
+
+sessionStorage.setItem("activeAccountEmail", email);
+setActiveAccountEmail(email);
+setFounder(data);
+
+const loaded = await loadSavedStartupDetails(email);
+
+if (loaded) {
+  setShowLogin(false);
+  setLoginEmail("");
+  setLoginPassword("");
+}
+  } catch (error) {
+    alert("Unable to connect to the server. Please try again.");
+  } finally {
+    setLoginLoading(false);
+  }
+}}
+
       >
         <div>
           <label className="mb-2 block text-sm font-medium">
@@ -592,6 +810,8 @@ const readinessScore = Math.round(
           <input
             type="email"
             required
+            value={loginEmail}
+onChange={(event) => setLoginEmail(event.target.value)}
             className="w-full rounded-lg border border-slate-300 px-4 py-3"
             placeholder="Enter your email"
           />
@@ -604,6 +824,8 @@ const readinessScore = Math.round(
           <input
             type="password"
             required
+            value={loginPassword}
+onChange={(event) => setLoginPassword(event.target.value)}
             className="w-full rounded-lg border border-slate-300 px-4 py-3"
             placeholder="Enter your password"
           />
@@ -613,7 +835,7 @@ const readinessScore = Math.round(
           type="submit"
           className="w-full rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
         >
-          Login
+          {loginLoading ? "Logging in..." : "Login"}
         </button>
       </form>
 
@@ -623,6 +845,122 @@ const readinessScore = Math.round(
         className="mt-6 w-full text-sm font-medium text-blue-700 hover:underline"
       >
         ← Back to Home
+      </button>
+    </div>
+  </main>
+) : founder ? (
+  <main className="mx-auto max-w-3xl px-6 py-12">
+    <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <h2 className="text-3xl font-bold">
+        Welcome back, {founder.fullName}!
+      </h2>
+
+      <p className="mt-3 text-slate-600">
+        Email: {founder.email}
+      </p>
+
+      <button
+        onClick={async () => {
+  const email = founder.email;
+  const normalizedEmail = email.toLowerCase();
+
+sessionStorage.setItem("activeAccountEmail", normalizedEmail);
+setActiveAccountEmail(normalizedEmail);
+
+  setForm((prev) => ({
+    ...prev,
+    fullName: founder.fullName || "",
+    email,
+    mobile: founder.mobile || "",
+    password: "",
+    confirmPassword: "",
+  }));
+
+  const loaded = await loadSavedStartupDetails(email);
+
+  if (!loaded) {
+  setRegistration({
+    designation: "",
+    linkedIn: "",
+    experience: "",
+    qualification: "",
+    previousStartup: "",
+    bio: "",
+    skills: [],
+    startupName: "",
+    tagline: "",
+    website: "",
+    startupEmail: "",
+    startupMobile: "",
+    industry: "",
+    startupStage: "",
+    companyType: "",
+    incorporationStatus: "",
+    incorporationDate: "",
+    cin: "",
+    gstNumber: "",
+    startupIndia: "",
+    dpiitNumber: "",
+    country: "India",
+    state: "",
+    city: "",
+    address: "",
+    pinCode: "",
+    founderCount: 1,
+    founders: [{
+      name: "",
+      role: "",
+      email: "",
+      mobile: "",
+      equityPercentage: "",
+      linkedInProfile: "",
+      experience: "",
+    }],
+    problem: "",
+    customers: "",
+    uniqueValue: "",
+    revenue: "",
+    teamSize: "",
+    fundingStage: "",
+    documents: {
+      pitchDeck: null,
+      companyProfile: null,
+      businessPlan: null,
+      financialModel: null,
+      founderResume: null,
+      productBrochure: null,
+      demoVideo: null,
+    },
+  });
+
+  setForm((prev) => ({
+    ...prev,
+    fullName: founder.fullName || "",
+    email,
+    mobile: founder.mobile || "",
+    password: "",
+    confirmPassword: "",
+  }));
+}
+
+  setFounder(null);
+  setCurrentStep(loaded ? 3 : 2);
+}}
+        className="mt-6 rounded-lg bg-blue-600 px-5 py-3 text-white"
+      >
+        Continue Registration
+      </button>
+
+      <button
+        onClick={() => {
+  setFounder(null);
+  setActiveAccountEmail("");
+  sessionStorage.removeItem("activeAccountEmail");
+  setCurrentStep(0);
+}}
+        className="ml-3 mt-6 rounded-lg border px-5 py-3"
+      >
+        Logout
       </button>
     </div>
   </main>
