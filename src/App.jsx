@@ -460,9 +460,8 @@ async function loadSavedStartupDetails(email) {
     );
 
     if (startupResponse.status === 404) {
-      alert("No saved startup details found. You can start a new registration.");
-      return false;
-    }
+  return false;
+}
 
     if (!startupResponse.ok) {
       throw new Error("Unable to load saved startup details.");
@@ -788,13 +787,11 @@ sessionStorage.setItem("activeAccountEmail", email);
 setActiveAccountEmail(email);
 setFounder(data);
 
-const loaded = await loadSavedStartupDetails(email);
+await loadSavedStartupDetails(email);
 
-if (loaded) {
-  setShowLogin(false);
-  setLoginEmail("");
-  setLoginPassword("");
-}
+setShowLogin(false);
+setLoginEmail("");
+setLoginPassword("");
   } catch (error) {
     alert("Unable to connect to the server. Please try again.");
   } finally {
